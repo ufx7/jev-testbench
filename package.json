@@ -1,0 +1,23 @@
+{
+  "name": "jev-testbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "determinism": "tsx src/bench/determinism.ts",
+    "latency": "tsx src/bench/latency.ts",
+    "context-limit": "tsx src/bench/contextLimit.ts",
+    "precision": "tsx src/bench/precision.ts",
+    "concurrency": "tsx src/bench/concurrency.ts",
+    "all": "tsx src/bench/runAll.ts",
+    "collab-demo": "tsx src/collab/demo.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

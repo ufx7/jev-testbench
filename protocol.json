@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "experiment": "agent-loom-e11-claude-jev-collab",
+  "lineage": "follows agent-loom-e10 (fresh_execution_affordance_replication); same schema shape, adapted for a non-peer collaborator",
+  "question": "How should Claude and Jev be put to work together, and on what class of decision-making problems does the pairing outperform Claude alone or a scripted-policy-plus-Jev pairing?",
+
+  "structural_note": "Jev is not a peer arm to Claude. Claude is an autonomous agent (proposes its own actions, can be denied, retries, decides when done). Jev makes exactly one typed judgment per call and stops: it cannot enumerate options, apply an action, or manage state. 'jev_only' therefore means 'code-driven scripted policy that owns the loop, with Jev supplying the one judgment the code can't make itself' -- not 'an autonomous Jev agent'. This must be stated in any write-up of results, not just in this file.",
+
+  "environment": {
+    "kind": "text-based grid/room navigation with a declared goal",
+    "legal_actions": "enumerable by code at every step (no free-form action space)",
+    "level_design": {
+      "straightforward": "unambiguous room descriptions, single obviously-correct path, used to check baseline competence and to watch for ceiling effects (E10 saturated at 100% pass on both arms and only showed an effect on a secondary metric -- expect the same risk here)",
+      "ambiguous": "deliberately misleading room descriptions (a promising-sounding dead end, two equally plausible exits where only one is correct) -- this is where calibrated judgment is hypothesized to earn its keep",
+      "optimal_path_length": "computed by code (BFS/Dijkstra over the level graph) for every level, used as ground truth for path efficiency, not estimated"
+    }
+  },
+
+  "arms": {
+    "claude_autonomous": {
+      "description": "Claude sees the state each turn and outputs the next action directly. Full autonomy: no Jev, no code-level judgment gate.",
+      "execution_model": "one continuous Claude session per episode",
+      "can_hallucinate_illegal_actions": true
+    },
+    "scripted_plus_jev": {
+      "description": "Code enumerates the legal actions each turn; Jev's Choice picks among them. No natural-language generation anywhere in the loop.",
+      "execution_model": "one Jev call per step, orchestrated entirely by code",
+      "can_hallucinate_illegal_actions": false,
+      "note": "tests how far calibrated judgment alone gets you with zero generative reasoning"
+    },
+    "claude_plus_jev": {
+      "description": "Claude proposes k candidate actions with rationale each turn; Jev arbitrates (Choice among Claude's candidates, always restricted to legal actions supplied by code); confidence gates auto-execute vs escalate.",
+      "execution_model": "one Claude call + one Jev call per step (plus extra Claude calls on escalation retries)",
+      "can_hallucinate_illegal_actions": false,
+      "escalation_rule": "if Jev's top-choice confidence < threshold (search this empirically, anchor near 0.75 per BeLazy167/typesafe-mod's shipped default), ask Claude once for different candidates citing the low confidence; if still below threshold after retry, log as 'would escalate to human' rather than guessing -- do not silently pick the low-confidence option"
+    }
+  },
+
+  "independent_variable": {
+    "name": "orchestration_mechanism",
+    "levels": [
+      "none (claude_autonomous)",
+      "calibrated_judgment_only (scripted_plus_jev)",
+      "generative_proposal_plus_calibrated_arbitration (claude_plus_jev)"
+    ]
+  },
+
+  "primary_outcomes": [
+    "success_rate (reached goal within max_steps)",
+    "path_efficiency (steps_taken / optimal_steps)",
+    "illegal_or_hallucinated_action_rate (expected ~0 for both Jev arms by construction; the interesting number is claude_autonomous's rate, and whether claude_plus_jev structurally eliminates it)"
+  ],
+
+  "secondary_outcomes": [
+    "escalation_rate (claude_plus_jev only) and human-agreement-rate on escalated cases",
+    "calibration_quality: does confidence predict correctness -- Jev's probabilities vs Claude's own declared_uncertainty text, scored against actual outcomes, not just presence/absence of a self-report",
+    "cost_usd, split by model (Claude $/token vs Jev $/token are not comparable units -- report both, and a combined total)",
+    "wall_seconds, split by model call type (Claude calls are slow/expensive per call; Jev calls are ~300-500ms -- report call counts per model too, not just totals)",
+    "context_tokens_used against each model's own ceiling (Jev's measured practical ceiling is ~33k input tokens; report headroom remaining per step, since long episodes may need a summarized/windowed state for Jev specifically)"
+  ],
+
+  "held_constant": [
+    "level set and goal definitions",
+    "legal-action interface text exposed to whichever model needs it",
+    "max_steps per episode (timeout)",
+    "random seed for level generation",
+    "number of trials per level per arm"
+  ],
+
+  "analysis": {
+    "stage_1_pilot": "run claude_autonomous on one straightforward and one ambiguous sentinel level, 5x each, to measure Claude's own step-to-step variance on this environment before committing a repeat count -- do not assume E10's N=5 transfers; Jev's variance is already measured (small, from the earlier determinism bench) but Claude's on this task is not",
+    "stage_2_breadth": "each level once per arm, across the full level set (straightforward + ambiguous)",
+    "stage_3_repeats": "sentinel levels (>=1 straightforward, >=1 ambiguous) repeated N times per arm, N set from stage_1's measured variance",
+    "reporting": "break results down by level type (straightforward vs ambiguous), not just aggregated -- the hypothesis is that the arms tie on straightforward levels and diverge on ambiguous ones; an aggregate-only report would hide exactly the result we're looking for"
+  },
+
+  "claim_boundary": "a configuration effect on this synthetic navigation environment; not a claim of general Claude+Jev superiority or a production guarantee. Extending the result to a real problem (e.g. an agent-action verifier) requires re-running this same protocol on that domain's own tasks.",
+
+  "safety": {
+    "network_tools_for_agents": "forbidden inside episodes",
+    "raw_traces": "local_only",
+    "provider_calls_require_fresh_explicit_approval_per_stage": true
+  },
+
+  "open_requirements": [
+    "ANTHROPIC_API_KEY needed to automate claude_autonomous and claude_plus_jev across many trials unattended",
+    "confidence threshold for escalation should be searched empirically (start near 0.75), not fixed a priori",
+    "level set (straightforward + ambiguous) needs to be authored and BFS-validated for optimal path length before stage_1 pilot runs"
+  ]
+}
