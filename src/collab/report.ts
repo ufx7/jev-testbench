@@ -103,9 +103,15 @@ export function pairwiseComparisons(results: EpisodeResult[]): PairwiseCompariso
       for (let j = i + 1; j < arms.length; j++) {
         const a = byTaskArm.get(`${taskId}::${arms[i]}`);
         const b = byTaskArm.get(`${taskId}::${arms[j]}`);
-        if (!a || !b || a.length !== b.length) continue; // unequal n: can't pair safely
-        const aSorted = [...a].sort((x, y) => x.episode - y.episode);
-        const bSorted = [...b].sort((x, y) => x.episode - y.episode);
+        if (!a || !b) continue;
+        // Episodes within one arm on one level are exchangeable (each is
+        // an independent run under identical conditions), so pairing on
+        // the first min(n) by episode index is valid even when one arm
+        // has more episodes than the other -- we just can't use the
+        // extra ones for the paired test.
+        const n = Math.min(a.length, b.length);
+        const aSorted = [...a].sort((x, y) => x.episode - y.episode).slice(0, n);
+        const bSorted = [...b].sort((x, y) => x.episode - y.episode).slice(0, n);
         out.push({
           taskId,
           armA: arms[i],
